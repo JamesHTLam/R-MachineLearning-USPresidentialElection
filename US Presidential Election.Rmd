@@ -1,0 +1,400 @@
+---
+title: "US Presidential Election Classification Project"
+author: "Hei Ting Lam"
+date: '2022-07-27'
+output: html_document
+---
+Can we train and predict US counties' presidential election outcome based on some demographics attributes? This project shows that we can do so. Welcome to follow the journey below.
+
+County presidential election result downloaded from https://www.kaggle.com/datasets/unanimad/us-election-2020?select=president_county.csv
+Data cleaning are done (i.e. only democrats and republicans data are left) for simplicity purpose.
+
+County demographics attributes data downloaded from https://www.ers.usda.gov/data-products/county-level-data-sets/download-data/
+Data cleaning (i.e. remove unnecessary column) are done to ensure R would be able to read data.
+
+#1. Load Required packages and data
+```{r}
+#install.packages('caret')
+library(caret)
+#install.packages('caTools')
+library(caTools)
+#install.packages('MASS')
+library(MASS)
+```
+
+```{r}
+#install.packages('randomForest') 
+library(randomForest)
+#install.packages('adabag)
+library(adabag)
+#install.packages('ada') 
+library(ada)
+#install.packages('xgboost') 
+library(xgboost)
+#install.packages('neuralnet')  
+library(neuralnet)
+#install.packages('e1071') 
+library(e1071)
+#install.packages('class') 
+library(class)
+#install.packages('rpart') 
+library(rpart)
+#install.packages('rpart.plot') 
+library(rpart.plot)
+```
+##1.1 Load election outcome data
+```{r}
+df_election_outcome<-read.csv('president_county_candidate.csv',header=TRUE,sep=',')
+head(df_election_outcome)
+```
+##1.2 Load county education, poverty, unemployment, population data
+```{r}
+#install.packages('readxl')
+library(readxl)
+```
+
+```{r}
+df_edu<-read_xlsx('Education.xlsx')
+df_poverty<-read_xlsx('PovertyEstimates.xlsx')
+df_unemployment<-read_xlsx('Unemployment.xlsx')
+df_pop<-read_xlsx('PopulationEstimates.xlsx')
+head(df_edu)
+head(df_poverty)
+head(df_unemployment)
+head(df_pop)
+```
+##1.2.1 clear unnecessary columns of education data
+```{r}
+df_edu<-df_edu[,c(1:3,6:7,52:55)]
+head(df_edu)
+```
+##1.2.2 clear unnecessary columns of poverty data
+```{r}
+df_poverty<-df_poverty[,c(1:3,6:7,11,26)]
+head(df_poverty)
+
+```
+##1.2.3 clear unnecessary columns of unemployment data
+```{r}
+df_unemployment<-df_unemployment[,c(1:3,4:6,90)]
+head(df_unemployment)
+```
+##1.2.4 clear unnecessary columns of population data
+```{r}
+df_pop<-df_pop[,c(1:4,8)]
+head(df_pop)
+```
+
+```{r}
+#install.packages('sqldf')
+library(sqldf)
+```
+##1.3 merge county education, poverty, unemployment, population data
+```{r}
+df<-sqldf('SELECT * FROM df_edu JOIN df_poverty ON df_edu.FIPS_code=df_poverty.FIPS_code JOIN df_unemployment ON df_poverty.FIPS_code=df_unemployment.FIPS_code JOIN df_pop on df_unemployment.FIPS_code=df_pop.FIPS_code')
+df<-df[,-c(1,4:5,10:14,17:21,24:27)]
+head(df)
+
+```
+##1.3.1 rename states column to the format of election outcome data 
+```{r}
+df$State[df$State=='AL']<-'Alabama'
+df$State[df$State=='AK']<-'Alaska'
+df$State[df$State=='AR']<-'Arkansas'
+df$State[df$State=='AZ']<-'Arizona'
+df$State[df$State=='CA']<-'California'
+df$State[df$State=='CO']<-'Colorado'
+df$State[df$State=='CT']<-'Connecticut'
+df$State[df$State=='DC']<-'District of Columbia'
+df$State[df$State=='DE']<-'Delaware'
+df$State[df$State=='FL']<-'Florida'
+df$State[df$State=='GA']<-'Georgia'
+df$State[df$State=='HI']<-'Hawaii'
+df$State[df$State=='IA']<-'Iowa'
+df$State[df$State=='ID']<-'Idaho'
+df$State[df$State=='IL']<-'Illinois'
+df$State[df$State=='IN']<-'Indiana'
+df$State[df$State=='KS']<-'Kansas'
+df$State[df$State=='KY']<-'Kentucky'
+df$State[df$State=='LA']<-'Louisiana'
+df$State[df$State=='MA']<-'Massachusetts'
+df$State[df$State=='MD']<-'Maryland'
+df$State[df$State=='ME']<-'Maine'
+df$State[df$State=='MI']<-'Michigan'
+df$State[df$State=='MN']<-'Minnesota'
+df$State[df$State=='MO']<-'Missouri'
+df$State[df$State=='MS']<-'Mississippi'
+df$State[df$State=='MT']<-'Montana'
+df$State[df$State=='NC']<-'North Carolina'
+df$State[df$State=='ND']<-'North Dakota'
+df$State[df$State=='NE']<-'Nebraska'
+df$State[df$State=='NH']<-'New Hampshire'
+df$State[df$State=='NJ']<-'New Jersey'
+df$State[df$State=='NM']<-'New Mexico'
+df$State[df$State=='NV']<-'Nevada'
+df$State[df$State=='NY']<-'New York'
+df$State[df$State=='OH']<-'Ohio'
+df$State[df$State=='OK']<-'Oklahoma'
+df$State[df$State=='OR']<-'Oregon'
+df$State[df$State=='PA']<-'Pennsylvania'
+df$State[df$State=='PR']<-'Puerto Rico'
+df$State[df$State=='RI']<-'Rhode Island'
+df$State[df$State=='SC']<-'South Carolina'
+df$State[df$State=='SD']<-'South Dakota'
+df$State[df$State=='TN']<-'Tennessee'
+df$State[df$State=='TX']<-'Texas'
+df$State[df$State=='UT']<-'Utah'
+df$State[df$State=='VA']<-'Virginia'
+df$State[df$State=='VT']<-'Vermont'
+df$State[df$State=='WA']<-'Washington'
+df$State[df$State=='WI']<-'Wisconsin'
+df$State[df$State=='WV']<-'West Virginia'
+df$State[df$State=='WY']<-'Wyoming'
+
+```
+
+##1.4 merge county election outcome with above attributes
+```{r}
+df_merge<-sqldf('SELECT * FROM df_election_outcome JOIN df WHERE df_election_outcome.state=df.State AND df_election_outcome.county=df.`Area name`')
+head(df_merge)
+
+```
+
+##1.4.1 clear unnecessary columns out of the merged file
+```{r}
+df_merge_1<-df_merge[,-c(1:3,5:7,9:10)]
+df_merge_1<-df_merge_1[-c(5),]
+df_merge_1$Vote_Share_Scale_.0.Dem.1.Rep.<-as.numeric(as.character(df_merge_1$Vote_Share_Scale_.0.Dem.1.Rep.))
+head(df_merge_1)
+```
+##1.4.2 rename columns of the merged file
+```{r}
+colnames(df_merge_1)<-c('Party','Democrats.0.or.Republican.1','Less.than.high.school.diploma','High.school.diploma.only','College.or.Associate.degree','Bachelor.Degree.or.Higher','Poverty.Percentage','Median.Household.Income','Rural.0.or.Urban.1','Unemployment.rate', 'Population')
+```
+
+##1.5 transform categorical variable (Dem or Rep) into dummy variable (Dem:0, Rep:1) 
+```{r}
+#install.packages('fastDummies')
+library(fastDummies)
+```
+
+```{r}
+dummy<-dummy_cols(df_merge_1,remove_first_dummy = TRUE)
+df_merge_final<-dummy[,-c(1)]
+df_merge_final<-df_merge_final[!is.na(df_merge_final$Rural.0.or.Urban.1),]
+head(df_merge_final)
+```
+
+##1.6 Show number of records that are republican or democrats, it shows the data set is imbalanced towards republicans
+```{r}
+nrow(df_merge_final[df_merge_final$Party_REP==1,])
+nrow(df_merge_final[df_merge_final$Party_REP==0,])
+```
+
+```{r}
+head(df_merge_final)
+```
+
+
+
+
+##1.7 Summary of data set
+```{r}
+summary(df_merge_final)
+```
+##1.8 feature plot of data set
+Plot shows republican counties have higher percentage of high school diploma only, while democrats counties have higher percentage of bachelor degree or above, differences in less than high school diploma and college or associate degree not apparent
+```{r}
+featurePlot(x=df_merge_final[,c(2:5)],y=df_merge_final$Democrats.0.or.Republican.1)
+```
+Democrat counties have higher unemployment rate and population, differences in other attributes like poverty percentage, median household income, and rural or urban seem not apparent just by looking at feature plot
+```{r}
+featurePlot(x=df_merge_final[,c(6:10)],y=df_merge_final$Democrats.0.or.Republican.1)
+```
+
+##1.9 Use range to scale data 
+```{r}
+transformer<-preProcess(df_merge_final,method='range')
+df_merge_final_trans<-predict(transformer,df_merge_final)
+head(df_merge_final_trans)
+```
+
+```{r}
+df_merge_final_trans_1<-df_merge_final_trans[-c(1)]
+```
+
+##1.10 Split data into 70% for training set and 30% testing test
+```{r}
+set.seed(145)
+train_part<-sample.split(df_merge_final_trans_1$Party_REP,SplitRatio = 0.7)
+df_train<-subset(df_merge_final_trans_1,train_part==TRUE)
+df_test<-subset(df_merge_final_trans_1,train_part==FALSE)
+nrow(df_train)
+nrow(df_test)
+```
+
+##1.11 Make target variable as factor
+```{r}
+df_train_final<-df_train
+df_train_final$Party_REP<-as.factor(as.character(df_train_final$Party_REP))
+head(df_train_final)
+```
+
+#2. Run classification models
+##2.1 Logistic Regression
+```{r}
+logis_reg_model<-glm(Party_REP~., data=df_train_final,family = "binomial")
+options(scipen=999)
+summary(logis_reg_model)
+```
+
+```{r}
+log_pred<-predict(logis_reg_model,df_test, type='response')
+df_test$result<-log_pred
+df_test$finalresult<-ifelse(df_test$result>=0.5,1,0)
+head(df_test)
+
+```
+
+```{r}
+log_result<-confusionMatrix(as.factor(df_test$finalresult),as.factor(df_test$Party_REP))
+print(log_result)
+```
+
+```{r}
+df_test<-df_test[,-c(11:12)]
+```
+
+##2.2 Decision Tree
+```{r}
+tree_model<-rpart(Party_REP~., data=df_train_final, control = rpart.control(cp = 0.001))
+rpart.plot(tree_model)
+
+```
+
+```{r}
+tree_pred<-predict(tree_model,df_test)
+```
+
+```{r}
+tree_pred_final <- ifelse(tree_pred[,c(2)]>=0.5,1,0)
+tree_result<-confusionMatrix(as.factor(tree_pred_final),as.factor(df_test$Party_REP))
+print(tree_result)
+
+```
+##2.3 Random Forest
+```{r}
+rf_model <- randomForest(Party_REP ~., data=df_train_final, importance=TRUE, proximity=TRUE)
+```
+
+```{r}
+rf_pred <- predict(rf_model, df_test)
+rf_result<-confusionMatrix(as.factor(rf_pred),as.factor(df_test$Party_REP))
+print(rf_result)
+```
+
+##2.4 AdaBoost
+```{r}
+ada_model <- ada(Party_REP~., data=df_train_final, type="gentle")
+
+```
+
+```{r}
+ada_pred <- predict(ada_model, df_test)
+ada_result <- confusionMatrix(as.factor(ada_pred),as.factor(df_test$Party_REP))
+print(ada_result)
+```
+
+##2.5 XGBoost
+```{r}
+df_xgboost<-df_train_final
+df_xgboost$Party_REP<-as.numeric(as.character(df_train_final$Party_REP))
+df_xgboost1 <- df_xgboost[,-c(10)]
+xgboost_model <- xgboost(data = as.matrix(df_xgboost1),label=df_xgboost$Party_REP, max.depth = 2, eta = 1, nthread = 2, nround =500, objective = "binary:logistic", verbose=0)
+
+```
+
+```{r}
+xgboost_pred <- predict(xgboost_model, as.matrix(df_test[,-c(10)]))
+xgboost_pred_final <- ifelse(xgboost_pred>=0.5,1,0)
+xgboost_result <- confusionMatrix(as.factor(xgboost_pred_final), as.factor(df_test$Party_REP))
+print(xgboost_result)
+```
+
+##2.6 Support Vector Machine - Linear
+```{r}
+svm_linear_model <- svm(Party_REP ~., data=df_train_final, kernel="linear")
+```
+
+```{r}
+svm_linear_pred<-predict(svm_linear_model,df_test)
+svm_linear_result<-confusionMatrix(as.factor(svm_linear_pred),as.factor(df_test$Party_REP))
+print(svm_linear_result)
+```
+##2.7 Support Vector Machine - RBF
+```{r}
+svm_rbf_model <- svm(Party_REP ~., data=df_train_final, kernel="radial")
+```
+
+```{r}
+svm_rbf_pred<-predict(svm_rbf_model,df_test)
+svm_rbf_result<-confusionMatrix(as.factor(svm_rbf_pred),as.factor(df_test$Party_REP))
+print(svm_rbf_result)
+```
+
+##2.8 K-Nearest Neighbors
+```{r}
+knn_train_df <- df_train_final[,-c(10)]
+knn_test_df <- df_test[,-c(10)]
+knn_model1<-knn(train=knn_train_df, test=knn_test_df, cl=df_train_final$Party_REP, k = 25, prob=FALSE)
+```
+
+```{r}
+knn_result<-confusionMatrix(as.factor(knn_model1), as.factor(df_test$Party_REP))
+print(knn_result)
+```
+##2.9 Neural Network
+```{r}
+nn_model <- neuralnet(Party_REP ~., data=df_train_final) 
+plot(nn_model)
+```
+
+```{r}
+nn_pred <- predict(nn_model, df_test)
+nn_pred_final <- ifelse(nn_pred[,2]>0.5,1,0)
+nn_result<-confusionMatrix(as.factor(nn_pred_final),as.factor(df_test$Party_REP))
+print(nn_result)
+```
+##2.10 Naive Bayes
+```{r}
+naive_bayes_model <- naiveBayes(Party_REP~., data=df_train_final)
+```
+
+```{r}
+naive_bayes_pred <- predict(naive_bayes_model, df_test)
+naive_bayes_result<-confusionMatrix(as.factor(naive_bayes_pred),as.factor(df_test$Party_REP))
+print(naive_bayes_result)
+```
+##2.11 Merge all the results together
+```{r}
+table_result<-cbind(log_result$byClass,tree_result$byClass,rf_result$byClass,ada_result$byClass,xgboost_result$byClass,svm_linear_result$byClass,svm_rbf_result$byClass,knn_result$byClass,nn_result$byClass,naive_bayes_result$byClass)
+table_accuracy<-cbind(log_result$overall['Accuracy'],tree_result$overall['Accuracy'],rf_result$overall['Accuracy'],ada_result$overall['Accuracy'],xgboost_result$overall['Accuracy'],svm_linear_result$overall['Accuracy'],svm_rbf_result$overall['Accuracy'],knn_result$overall['Accuracy'],nn_result$overall['Accuracy'],naive_bayes_result$overall['Accuracy'])
+table_final<-rbind(table_accuracy,table_result)
+colnames(table_final)<-c('Logistic Regression','Decision Tree','Random Forest','Adaboost','Xgboost','SVM - Linear','SVM - RBF','KNN','Neural Net','Naive Bayes')
+print(table_final)
+```
+
+##2.11.1 Transpose the result and order it by accuracy, sensitivity, specificity and balanced accuracy respectively
+```{r}
+transposed_table_final<-as.data.frame(t(table_final[c(1:3,12),]))
+transposed_table_final[order(-transposed_table_final$Accuracy),]  
+transposed_table_final[order(-transposed_table_final$Sensitivity),]  
+transposed_table_final[order(-transposed_table_final$Specificity),]  
+transposed_table_final[order(-transposed_table_final$`Balanced Accuracy`),]  
+```
+
+From the tables above, accuracy ranged from 0.8773 (Naive Bayes) to 0.9102 (SVM - RBF), it shows accuracy of different methods are more or less the same. However, there is more differences in sensitivity and specificity. 
+Sensitivity of all classification models are very low, with the highest are Logistic Regression (0.6138) and Neural Net (0.6138). Other methods like KNN (0.4690) and Decision Tree (0.5379) has much lower sensitivity.  
+For specificity, the models has specificity in a range of 0.9310 to 0.9792, with KNN has the highest value. In the mean time, Naive Bayes and tree-based methods like decision tree, XGBoost have lesser value. 
+The result show that, as the data is imbalanced to Republicans, most methods can achieve good results in predicting Republican win counties (Specificity)--that means identifying majority class than minority class. However, KNN, Random Forest and Decision Tree perform particularly worse in identifying Democrat win counties (Sensitivity).
+For our analysis, since we want to correctly classify both democrat win and republican win result (thus sensitivity and specificity is also important, in contrast to some other business analysis which need to maximize chance of getting true positive, e.g. identifying loan default), it is important to choose a classification method that perform well in both sensitivity and specificity. Therefore, Logistic Regression and Neural Net, which has best balanced accuracy, would be considered the best in our analysis. 
